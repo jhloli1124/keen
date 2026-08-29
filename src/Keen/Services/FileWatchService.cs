@@ -36,6 +36,18 @@ internal sealed class FileWatchService : IDisposable
     // 同目录改名(旧路径命中被监控文件)时触发:(guid, 新完整路径)。由 WatchService 跟随更新。
     public event Action<Guid, string>? FileMoved;
 
+    // 改名跟随的宽限期:旧名被改名挪走后,等 2s——期内旧名重建 = 保存套路(挪走旧文件+原名写新文件),
+    // 取消跟随、继续盯旧名;期内没回来 = 真改名,才提交跟随。
+    private sealed class PendingMove
+    {
+        public Guid Guid;
+        public string NewPath = "";
+        public Timer Timer = null!;
+    }
+
+    private readonly Dictionary<Guid, PendingMove> _pending = new();
+    private static readonly TimeSpan MoveGrace = TimeSpan.FromSeconds(2);
+
     public void Add(WatchedFile wf)
     {
         lock (_gate)
@@ -49,6 +61,7 @@ internal sealed class FileWatchService : IDisposable
     {
         lock (_gate)
         {
+            if (_pending.Remove(guid, out var pm)) { try { pm.Timer.Dispose(); } catch { } }
             if (!_files.TryGetValue(guid, out var wf)) return;
             var dir = Path.GetDirectoryName(wf.CurrentPath) ?? "";
             _files.Remove(guid);
@@ -100,12 +113,30 @@ internal sealed class FileWatchService : IDisposable
             var name = Path.GetFileName(fullPath);
             if (!_dirs.TryGetValue(dir, out var dw)) return;
             if (!dw.NameToGuid.TryGetValue(name, out guid)) return;
+            // 旧名在宽限期内出现事件(重建/改动)= 上一条改名是保存套路,取消待定的跟随
+            if (_pending.Remove(guid, out var pm)) { try { pm.Timer.Dispose(); } catch { } }
         }
         _pipeline.OnFileChanged(guid);
     }
 
+    private void CommitMove(Guid guid)
+    {
+        string? newPath = null;
+        lock (_gate)
+        {
+            if (_pending.Remove(guid, out var pm))
+            {
+                try { pm.Timer.Dispose(); } catch { }
+                if (_files.ContainsKey(guid)) newPath = pm.NewPath;
+            }
+        }
+        if (newPath is null) return;
+        try { FileMoved?.Invoke(guid, newPath); }
+        catch (Exception ex) { _log.LogError(ex, "FileMoved 处理出错"); }
+    }
+
     // Renamed:新路径命中被监控名 = 原子保存(temp → 目标名),照常防抖;
-    // 旧路径命中被监控名而新名不同 = 用户改名,上报 FileMoved 跟随。
+    // 旧路径命中被监控名而新名不同 = 改名挪走,进宽限期(2s 内旧名重建则判定为保存套路,不跟随)。
     private void OnRenamed(RenamedEventArgs e)
     {
         Route(e.FullPath);
@@ -118,9 +149,12 @@ internal sealed class FileWatchService : IDisposable
             if (!_dirs.TryGetValue(oldDir, out var dw)) return;
             if (!dw.NameToGuid.TryGetValue(oldName, out guid)) return;
             if (string.Equals(e.FullPath, e.OldFullPath, StringComparison.OrdinalIgnoreCase)) return;
+
+            if (_pending.TryGetValue(guid, out var prev)) { try { prev.Timer.Dispose(); } catch { } }
+            var pm = new PendingMove { Guid = guid, NewPath = e.FullPath };
+            pm.Timer = new Timer(_ => CommitMove(guid), null, MoveGrace, Timeout.InfiniteTimeSpan);
+            _pending[guid] = pm;
         }
-        try { FileMoved?.Invoke(guid, e.FullPath); }
-        catch (Exception ex) { _log.LogError(ex, "FileMoved 处理出错"); }
     }
 
     private async void OnError(object? sender, ErrorEventArgs e)
@@ -217,6 +251,12 @@ internal sealed class FileWatchService : IDisposable
     {
         try { SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { }
         _healthPoll.Dispose();
-        lock (_gate) { foreach (var d in _dirs.Values) { try { d.Fsw.Dispose(); } catch { } } _dirs.Clear(); }
+        lock (_gate)
+        {
+            foreach (var pm in _pending.Values) { try { pm.Timer.Dispose(); } catch { } }
+            _pending.Clear();
+            foreach (var d in _dirs.Values) { try { d.Fsw.Dispose(); } catch { } }
+            _dirs.Clear();
+        }
     }
 }
