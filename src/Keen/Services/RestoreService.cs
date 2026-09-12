@@ -22,14 +22,29 @@ internal sealed class RestoreService
 
     public async Task RestoreAsync(VersionEntry target, CancellationToken ct = default)
     {
-        var origPath = target.OrigPathAtCapture;
-        if (!File.Exists(origPath))
-            throw new FileNotFoundException("原文件当前不存在(可能被删除或移动):", origPath);
+        // 目标路径:优先取被监控文件的当前路径(改名跟随会更新它);
+        // 版本行里的 OrigPathAtCapture 是捕获当时的路径,文件改名后指向旧位置,不能当恢复目标。
+        var wf = await _index.GetWatchedFileAsync(target.WatchedGuid);
+        var origPath = wf is not null && !string.IsNullOrEmpty(wf.CurrentPath)
+            ? wf.CurrentPath
+            : target.OrigPathAtCapture;
+
         var verPath = _store.FullPath(target.StoredRelPath);
         if (!File.Exists(verPath))
             throw new FileNotFoundException("历史版本文件缺失:", target.StoredRelPath);
 
-        // 已停止监控的文件:临时注册进管线,否则前置快照必失败。
+        // 原文件不在(被删/被移):恢复 = 从历史重建——这正是恢复存在的意义,不是错误。
+        // 没有可拍的当前状态 → 跳过前置快照;父目录缺失一并补建;File.Copy 直接落出文件。
+        if (!File.Exists(origPath))
+        {
+            var dir = Path.GetDirectoryName(origPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            await CopyWithRetryAsync(verPath, origPath, ct);
+            await _pipeline.ReSeedBaselineAsync(target.WatchedGuid);
+            return;
+        }
+
+        // 原文件在:前置快照 → 覆盖。已停止监控的文件临时注册进管线,否则快照必失败。
         var wasRegistered = _pipeline.IsRegistered(target.WatchedGuid);
         if (!wasRegistered)
             await _pipeline.RegisterAsync(target.WatchedGuid, origPath, target.OrigFilename);
