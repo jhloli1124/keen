@@ -64,7 +64,9 @@ internal sealed class RestoreService
         }
         finally
         {
-            if (!wasRegistered)
+            // 只清「真正已停用」的文件:按恢复瞬间的注册态判断会把激活文件的管线状态
+            // 永久注销(事件从此静默丢弃、零日志),追踪就此死亡。
+            if (wf is null || !wf.IsActive)
                 await _pipeline.StopFileAsync(target.WatchedGuid, TimeSpan.FromSeconds(2));
         }
     }

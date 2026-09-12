@@ -117,7 +117,13 @@ internal sealed class BackupPipeline : IDisposable
 
     public void OnFileChanged(Guid guid)
     {
-        if (!_states.TryGetValue(guid, out var st)) return;
+        if (!_states.TryGetValue(guid, out var st))
+        {
+            // 激活文件的监听事件到了、管线状态却不在 = 断链,之前这里是静默 return,
+            // 追踪死亡零痕迹。记下来让它现形。
+            _log.LogWarning("收到 {Guid} 的变更事件,但管线状态不存在(已停止或断链)", guid);
+            return;
+        }
         var path = st.Path;
         var name = st.DisplayName;
         Timer t;
