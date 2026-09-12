@@ -217,8 +217,16 @@ internal sealed class HistoryForm : Form
     {
         if (SelectedOne() is not { } e) return;
         var when = new DateTime(e.CapturedAtTicks, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+        // 与 RestoreService 同样的目标路径解析:优先被监控文件的当前路径
+        var wf = await _index.GetWatchedFileAsync(e.WatchedGuid);
+        var target = wf is not null && !string.IsNullOrEmpty(wf.CurrentPath) ? wf.CurrentPath : e.OrigPathAtCapture;
+        var exists = File.Exists(target);
+
         var ok = MessageBox.Show(this,
-            $"恢复到所选版本?\n\n版本:{when}(大小 {VersionRow.FormatBytes(e.SizeBytes)})\n\n当前的原文件会先自动存进历史(作为「恢复前快照」),\n所以这一步可以再撤销。\n\n确定恢复?",
+            exists
+                ? $"恢复到所选版本?\n\n版本:{when}(大小 {VersionRow.FormatBytes(e.SizeBytes)})\n\n当前的原文件会先自动存进历史(作为「恢复前快照」),\n所以这一步可以再撤销。\n\n确定恢复?"
+                : $"原文件已不存在(被删除或移动)。\n恢复将按所选版本新建还原文件。\n\n版本:{when}(大小 {VersionRow.FormatBytes(e.SizeBytes)})\n\n确定恢复?",
             "Keen · 恢复", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
         if (ok != DialogResult.OK) return;
 
@@ -227,7 +235,10 @@ internal sealed class HistoryForm : Form
         try
         {
             await _restore.RestoreAsync(e);
-            MessageBox.Show(this, "已恢复。原文件已回到所选版本;恢复前的状态已存为「恢复前快照」。",
+            MessageBox.Show(this,
+                exists
+                    ? "已恢复。原文件已回到所选版本;恢复前的状态已存为「恢复前快照」。"
+                    : "源文件被删除,已成功新建还原文件。",
                 "Keen", MessageBoxButtons.OK, MessageBoxIcon.Information);
             await LoadAsync();
         }
