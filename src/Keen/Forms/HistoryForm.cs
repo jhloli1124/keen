@@ -112,6 +112,9 @@ internal sealed class HistoryForm : Form
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(0, 90, 158);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        // 锁死：禁止手动调整行高与列头高
+        _grid.AllowUserToResizeRows = false;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         AddCol("时间", nameof(VersionRow.TimeDisplay), 160);
         AddCol("大小", nameof(VersionRow.SizeDisplay), 90);
         AddCol("类型", nameof(VersionRow.KindDisplay), 110);

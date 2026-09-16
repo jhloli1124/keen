@@ -82,6 +82,9 @@ internal sealed class MainForm : Form
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(0, 90, 158);
         _grid.DefaultCellStyle.SelectionForeColor = Color.White;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        // 锁死：禁止手动调整行高与列头高
+        _grid.AllowUserToResizeRows = false;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         AddCol("文件", nameof(WatchedRow.DisplayName), 160);
         AddCol("路径", nameof(WatchedRow.Path), 300);
         AddCol("状态", nameof(WatchedRow.HealthDisplay), 70);
