@@ -122,10 +122,12 @@ dotnet build                # → build\Debug\
 dotnet publish -c Release   # → build\Release\（框架依赖多文件，需目标机有 .NET 10 运行时）
 ```
 
-默认**框架依赖**；要出给别人用的自包含完整包（无需另装运行时）：
+默认**框架依赖**
+
+构建 Release，单文件自包含（无需另装运行时）：
 
 ```bash
-dotnet publish -c Release --self-contained -r win-x64
+dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -o build/Single
 ```
 
 两种都是多文件形态（非单文件）：更新时只需替换变化的文件（通常只有 `Keen.dll`），便于增量更新。
