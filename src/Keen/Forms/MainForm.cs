@@ -90,7 +90,8 @@ internal sealed class MainForm : Form
         AddCol("状态", nameof(WatchedRow.HealthDisplay), 70);
         AddCol("上次存版", nameof(WatchedRow.LastCapturedDisplay), 150);
         AddCol("版本数", nameof(WatchedRow.VersionCount), 60);
-        AddCol("大小", nameof(WatchedRow.SizeDisplay), 80);
+        AddCol("当前大小", nameof(WatchedRow.SizeDisplay), 90);
+        AddCol("历史总大小", nameof(WatchedRow.TotalSizeDisplay), 100);
         _grid.DataSource = _rows;
 
         Controls.Add(_grid);
@@ -181,6 +182,7 @@ internal sealed class MainForm : Form
                 continue; // 加载期间 FileAdded 可能已加过该行
             var count = await _index.CountVersionsAsync(wf.Guid);
             var last = await _index.GetLastVersionAsync(wf.Guid);
+            var totalSize = await _index.GetTotalSizeAsync(wf.Guid);
             _rows.Add(
                 new WatchedRow
                 {
@@ -191,6 +193,7 @@ internal sealed class MainForm : Form
                     VersionCountField = count,
                     LastCapturedTicksField = last?.CapturedAtTicks ?? 0,
                     SizeBytesField = last?.SizeBytes ?? 0,
+                    TotalSizeBytesField = totalSize,
                     HealthField = FileHealth.Watching,
                 }
             );
@@ -220,6 +223,7 @@ internal sealed class MainForm : Form
             row.VersionCountField += 1;
             row.LastCapturedTicksField = e.CapturedAtTicks;
             row.SizeBytesField = e.SizeBytes;
+            row.TotalSizeBytesField += e.SizeBytes;
             row.HealthField = FileHealth.Watching;
         });
 
@@ -522,6 +526,7 @@ internal sealed class WatchedRow : INotifyPropertyChanged
     private long _versionCount;
     private long _lastTicks;
     private long _size;
+    private long _totalSize;
     private FileHealth _health = FileHealth.Watching;
     private bool _isActive = true;
 
@@ -613,6 +618,15 @@ internal sealed class WatchedRow : INotifyPropertyChanged
             On(nameof(SizeDisplay));
         }
     }
+    internal long TotalSizeBytesField
+    {
+        get => _totalSize;
+        set
+        {
+            _totalSize = value;
+            On(nameof(TotalSizeDisplay));
+        }
+    }
     internal FileHealth HealthField
     {
         get => _health;
@@ -653,6 +667,8 @@ internal sealed class WatchedRow : INotifyPropertyChanged
                 .ToString("yyyy-MM-dd HH:mm:ss");
 
     public string SizeDisplay => FormatBytes(SizeBytes);
+
+    public string TotalSizeDisplay => FormatBytes(TotalSizeBytesField);
 
     private static string FormatBytes(long n)
     {

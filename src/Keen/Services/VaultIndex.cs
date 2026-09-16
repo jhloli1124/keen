@@ -300,6 +300,23 @@ internal sealed class VaultIndex : IDisposable
         }
     }
 
+    public async Task<long> GetTotalSizeAsync(Guid guid)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            using var c = _conn.CreateCommand();
+            c.CommandText =
+                "SELECT COALESCE(SUM(size_bytes),0) FROM version WHERE watched_guid=@g;";
+            c.Parameters.AddWithValue("@g", guid.ToString());
+            return (long)(await c.ExecuteScalarAsync())!;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<(long count, long size)> GetTotalsAsync()
     {
         await _lock.WaitAsync();
