@@ -22,9 +22,20 @@ internal sealed class FileWatchService : IDisposable
     {
         _pipeline = pipeline;
         _log = log;
-        _healthPoll = new Timer(_ => HealthPoll(), null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
-        try { SystemEvents.PowerModeChanged += OnPowerModeChanged; }
-        catch (Exception ex) { _log.LogWarning(ex, "无法挂载电源事件钩子(睡眠/唤醒恢复将退化为下次轮询)"); }
+        _healthPoll = new Timer(
+            _ => HealthPoll(),
+            null,
+            TimeSpan.FromSeconds(60),
+            TimeSpan.FromSeconds(60)
+        );
+        try
+        {
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "无法挂载电源事件钩子(睡眠/唤醒恢复将退化为下次轮询)");
+        }
     }
 
     private sealed class DirWatch
@@ -61,11 +72,20 @@ internal sealed class FileWatchService : IDisposable
     {
         lock (_gate)
         {
-            if (_pending.Remove(guid, out var pm)) { try { pm.Timer.Dispose(); } catch { } }
-            if (!_files.TryGetValue(guid, out var wf)) return;
+            if (_pending.Remove(guid, out var pm))
+            {
+                try
+                {
+                    pm.Timer.Dispose();
+                }
+                catch { }
+            }
+            if (!_files.TryGetValue(guid, out var wf))
+                return;
             var dir = Path.GetDirectoryName(wf.CurrentPath) ?? "";
             _files.Remove(guid);
-            if (_dirs.ContainsKey(dir)) EnsureDir(dir);
+            if (_dirs.ContainsKey(dir))
+                EnsureDir(dir);
         }
         _pipeline.MarkHealth(guid, FileHealth.Watching, null);
     }
@@ -74,28 +94,44 @@ internal sealed class FileWatchService : IDisposable
     // 并在目录回来时重武装)——构造 FSW 对缺失目录会直接抛异常,曾导致启动崩溃(评审致命#2)。
     private void EnsureDir(string dir)
     {
-        if (_dirs.TryGetValue(dir, out var old)) { try { old.Fsw.Dispose(); } catch { } _dirs.Remove(dir); }
-        if (!Directory.Exists(dir)) return;
+        if (_dirs.TryGetValue(dir, out var old))
+        {
+            try
+            {
+                old.Fsw.Dispose();
+            }
+            catch { }
+            _dirs.Remove(dir);
+        }
+        if (!Directory.Exists(dir))
+            return;
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nameToGuid = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var wf in _files.Values)
         {
             var d = Path.GetDirectoryName(wf.CurrentPath) ?? "";
-            if (!dir.Equals(d, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!dir.Equals(d, StringComparison.OrdinalIgnoreCase))
+                continue;
             var name = Path.GetFileName(wf.CurrentPath);
             names.Add(name);
             nameToGuid[name] = wf.Guid;
         }
-        if (names.Count == 0) return;
+        if (names.Count == 0)
+            return;
 
         var fsw = new FileSystemWatcher(dir)
         {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.CreationTime,
+            NotifyFilter =
+                NotifyFilters.LastWrite
+                | NotifyFilters.FileName
+                | NotifyFilters.Size
+                | NotifyFilters.CreationTime,
             InternalBufferSize = 32 * 1024,
             IncludeSubdirectories = false,
         };
-        foreach (var n in names) fsw.Filters.Add(n);
+        foreach (var n in names)
+            fsw.Filters.Add(n);
         fsw.Changed += (_, e) => Route(e.FullPath);
         fsw.Created += (_, e) => Route(e.FullPath);
         fsw.Renamed += (_, e) => OnRenamed(e);
@@ -111,10 +147,19 @@ internal sealed class FileWatchService : IDisposable
         {
             var dir = Path.GetDirectoryName(fullPath) ?? "";
             var name = Path.GetFileName(fullPath);
-            if (!_dirs.TryGetValue(dir, out var dw)) return;
-            if (!dw.NameToGuid.TryGetValue(name, out guid)) return;
+            if (!_dirs.TryGetValue(dir, out var dw))
+                return;
+            if (!dw.NameToGuid.TryGetValue(name, out guid))
+                return;
             // 旧名在宽限期内出现事件(重建/改动)= 上一条改名是保存套路,取消待定的跟随
-            if (_pending.Remove(guid, out var pm)) { try { pm.Timer.Dispose(); } catch { } }
+            if (_pending.Remove(guid, out var pm))
+            {
+                try
+                {
+                    pm.Timer.Dispose();
+                }
+                catch { }
+            }
         }
         _pipeline.OnFileChanged(guid);
     }
@@ -126,13 +171,25 @@ internal sealed class FileWatchService : IDisposable
         {
             if (_pending.Remove(guid, out var pm))
             {
-                try { pm.Timer.Dispose(); } catch { }
-                if (_files.ContainsKey(guid)) newPath = pm.NewPath;
+                try
+                {
+                    pm.Timer.Dispose();
+                }
+                catch { }
+                if (_files.ContainsKey(guid))
+                    newPath = pm.NewPath;
             }
         }
-        if (newPath is null) return;
-        try { FileMoved?.Invoke(guid, newPath); }
-        catch (Exception ex) { _log.LogError(ex, "FileMoved 处理出错"); }
+        if (newPath is null)
+            return;
+        try
+        {
+            FileMoved?.Invoke(guid, newPath);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "FileMoved 处理出错");
+        }
     }
 
     // Renamed:新路径命中被监控名 = 原子保存(temp → 目标名),照常防抖;
@@ -146,11 +203,21 @@ internal sealed class FileWatchService : IDisposable
         {
             var oldDir = Path.GetDirectoryName(e.OldFullPath) ?? "";
             var oldName = Path.GetFileName(e.OldFullPath);
-            if (!_dirs.TryGetValue(oldDir, out var dw)) return;
-            if (!dw.NameToGuid.TryGetValue(oldName, out guid)) return;
-            if (string.Equals(e.FullPath, e.OldFullPath, StringComparison.OrdinalIgnoreCase)) return;
+            if (!_dirs.TryGetValue(oldDir, out var dw))
+                return;
+            if (!dw.NameToGuid.TryGetValue(oldName, out guid))
+                return;
+            if (string.Equals(e.FullPath, e.OldFullPath, StringComparison.OrdinalIgnoreCase))
+                return;
 
-            if (_pending.TryGetValue(guid, out var prev)) { try { prev.Timer.Dispose(); } catch { } }
+            if (_pending.TryGetValue(guid, out var prev))
+            {
+                try
+                {
+                    prev.Timer.Dispose();
+                }
+                catch { }
+            }
             var pm = new PendingMove { Guid = guid, NewPath = e.FullPath };
             pm.Timer = new Timer(_ => CommitMove(guid), null, MoveGrace, Timeout.InfiniteTimeSpan);
             _pending[guid] = pm;
@@ -164,13 +231,25 @@ internal sealed class FileWatchService : IDisposable
             var fsw = (FileSystemWatcher)sender!;
             var dir = fsw.Path;
             _log.LogWarning(e.GetException(), "FSW error on {Dir}, 1s 后重建 + catch-up", dir);
-            try { fsw.Dispose(); } catch { }
+            try
+            {
+                fsw.Dispose();
+            }
+            catch { }
             await Task.Delay(1000);
             List<WatchedFile> snap;
-            lock (_gate) { EnsureDir(dir); snap = FilesInDir(dir); }
-            foreach (var wf in snap) _pipeline.EnqueueCatchup(wf.Guid, wf.CurrentPath, wf.DisplayName);
+            lock (_gate)
+            {
+                EnsureDir(dir);
+                snap = FilesInDir(dir);
+            }
+            foreach (var wf in snap)
+                _pipeline.EnqueueCatchup(wf.Guid, wf.CurrentPath, wf.DisplayName);
         }
-        catch (Exception ex) { _log.LogError(ex, "OnError 处理出错"); }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "OnError 处理出错");
+        }
     }
 
     private void HealthPoll()
@@ -186,25 +265,36 @@ internal sealed class FileWatchService : IDisposable
                 {
                     if (_dirs.TryGetValue(dir, out var dw))
                     {
-                        try { dw.Fsw.Dispose(); } catch { }
+                        try
+                        {
+                            dw.Fsw.Dispose();
+                        }
+                        catch { }
                         _dirs.Remove(dir);
                     }
-                    missing.Add((wf.Guid, "父目录不存在(被改名/移动?)"));
+                    missing.Add((wf.Guid, "父目录不存在（被改名/移动？）"));
                     continue;
                 }
                 if (!_dirs.ContainsKey(dir))
                 {
-                    if (!rearmDirs.Contains(dir)) rearmDirs.Add(dir);
+                    if (!rearmDirs.Contains(dir))
+                        rearmDirs.Add(dir);
                 }
                 else if (!File.Exists(wf.CurrentPath))
                 {
-                    missing.Add((wf.Guid, "文件不存在(被删除/改名?)"));
+                    missing.Add((wf.Guid, "文件不存在（被删除/改名？）"));
                 }
             }
             foreach (var d in rearmDirs)
             {
-                try { EnsureDir(d); }
-                catch (Exception ex) { _log.LogWarning(ex, "重武装 {Dir} 失败", d); }
+                try
+                {
+                    EnsureDir(d);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "重武装 {Dir} 失败", d);
+                }
             }
         }
         foreach (var d in rearmDirs)
@@ -221,41 +311,83 @@ internal sealed class FileWatchService : IDisposable
 
     private async void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
-        if (e.Mode != PowerModes.Resume) return;
+        if (e.Mode != PowerModes.Resume)
+            return;
         try
         {
             _log.LogInformation("电源恢复,重建监听 + 全量 catch-up");
             List<WatchedFile> snap;
             lock (_gate)
             {
-                foreach (var d in _dirs.Values) { try { d.Fsw.Dispose(); } catch { } }
+                foreach (var d in _dirs.Values)
+                {
+                    try
+                    {
+                        d.Fsw.Dispose();
+                    }
+                    catch { }
+                }
                 _dirs.Clear();
                 // 逐个武装,单个坏目录不中断后面的健康文件(评审高危:恢复循环中断)
                 foreach (var wf in _files.Values)
                 {
-                    try { EnsureDir(Path.GetDirectoryName(wf.CurrentPath) ?? ""); }
-                    catch (Exception ex) { _log.LogWarning(ex, "恢复时无法武装 {Path}", wf.CurrentPath); }
+                    try
+                    {
+                        EnsureDir(Path.GetDirectoryName(wf.CurrentPath) ?? "");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "恢复时无法武装 {Path}", wf.CurrentPath);
+                    }
                 }
                 snap = _files.Values.ToList();
             }
-            foreach (var wf in snap) _pipeline.EnqueueCatchup(wf.Guid, wf.CurrentPath, wf.DisplayName);
+            foreach (var wf in snap)
+                _pipeline.EnqueueCatchup(wf.Guid, wf.CurrentPath, wf.DisplayName);
         }
-        catch (Exception ex) { _log.LogError(ex, "电源恢复处理出错"); }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "电源恢复处理出错");
+        }
     }
 
     private List<WatchedFile> FilesInDir(string dir) =>
-        _files.Values.Where(w => (Path.GetDirectoryName(w.CurrentPath) ?? "")
-            .Equals(dir, StringComparison.OrdinalIgnoreCase)).ToList();
+        _files
+            .Values.Where(w =>
+                (Path.GetDirectoryName(w.CurrentPath) ?? "").Equals(
+                    dir,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            .ToList();
 
     public void Dispose()
     {
-        try { SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { }
+        try
+        {
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        }
+        catch { }
         _healthPoll.Dispose();
         lock (_gate)
         {
-            foreach (var pm in _pending.Values) { try { pm.Timer.Dispose(); } catch { } }
+            foreach (var pm in _pending.Values)
+            {
+                try
+                {
+                    pm.Timer.Dispose();
+                }
+                catch { }
+            }
             _pending.Clear();
-            foreach (var d in _dirs.Values) { try { d.Fsw.Dispose(); } catch { } }
+            foreach (var d in _dirs.Values)
+            {
+                try
+                {
+                    d.Fsw.Dispose();
+                }
+                catch { }
+            }
             _dirs.Clear();
         }
     }

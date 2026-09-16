@@ -34,7 +34,8 @@ internal sealed class MainForm : Form
         _watches = sp.GetRequiredService<WatchService>();
 
         Text = "Keen · 被监控文件";
-        Width = 980; Height = 580;
+        Width = 980;
+        Height = 580;
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = true;
 
@@ -104,43 +105,62 @@ internal sealed class MainForm : Form
 
         // #5 拖拽:把文件拖进主窗直接添加
         AllowDrop = true;
-        DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.FileDrop) == true ? DragDropEffects.Copy : DragDropEffects.None;
+        DragEnter += (_, e) =>
+            e.Effect =
+                e.Data?.GetDataPresent(DataFormats.FileDrop) == true
+                    ? DragDropEffects.Copy
+                    : DragDropEffects.None;
         DragDrop += async (_, e) =>
         {
-            if (e.Data?.GetData(DataFormats.FileDrop) is not string[] files) return;
+            if (e.Data?.GetData(DataFormats.FileDrop) is not string[] files)
+                return;
             var rejected = new List<string>();
             foreach (var f in files)
             {
                 var wf = await _watches.AddFileAsync(f);
-                if (wf is null) rejected.Add(f);
+                if (wf is null)
+                    rejected.Add(f);
             }
             if (rejected.Count > 0)
-                MessageBox.Show(this,
-                    "未能添加(路径不支持、在保险库内部或非法路径):\n" + string.Join("\n", rejected),
-                    "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    this,
+                    "未能添加（路径不支持、在保险库内部或非法路径）：\n"
+                        + string.Join("\n", rejected),
+                    "Keen",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
         };
 
         UpdateButtonStates();
     }
 
     private void AddCol(string header, string prop, int width) =>
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            HeaderText = header,
-            DataPropertyName = prop,
-            Name = prop,
-            Width = width,
-            FillWeight = width,
-        });
+        _grid.Columns.Add(
+            new DataGridViewTextBoxColumn
+            {
+                HeaderText = header,
+                DataPropertyName = prop,
+                Name = prop,
+                Width = width,
+                FillWeight = width,
+            }
+        );
 
-    private Guid SelectedGuid() => (_grid.CurrentRow?.DataBoundItem as WatchedRow)?.Guid ?? Guid.Empty;
+    private Guid SelectedGuid() =>
+        (_grid.CurrentRow?.DataBoundItem as WatchedRow)?.Guid ?? Guid.Empty;
 
     private void UpdateButtonStates()
     {
         var row = _grid.CurrentRow?.DataBoundItem as WatchedRow;
         if (row is null)
         {
-            _remove.Enabled = _open.Enabled = _history.Enabled = _reactivate.Enabled = _purge.Enabled = false;
+            _remove.Enabled =
+                _open.Enabled =
+                _history.Enabled =
+                _reactivate.Enabled =
+                _purge.Enabled =
+                    false;
             return;
         }
         _remove.Enabled = _open.Enabled = row.IsActive;
@@ -154,20 +174,23 @@ internal sealed class MainForm : Form
         var files = await _index.LoadAllWatchedFilesAsync();
         foreach (var wf in files)
         {
-            if (FindRowByPath(wf.CurrentPath) is not null) continue; // 加载期间 FileAdded 可能已加过该行
+            if (FindRowByPath(wf.CurrentPath) is not null)
+                continue; // 加载期间 FileAdded 可能已加过该行
             var count = await _index.CountVersionsAsync(wf.Guid);
             var last = await _index.GetLastVersionAsync(wf.Guid);
-            _rows.Add(new WatchedRow
-            {
-                Guid = wf.Guid,
-                DisplayName = wf.DisplayName,
-                Path = wf.CurrentPath,
-                IsActiveField = wf.IsActive,
-                VersionCountField = count,
-                LastCapturedTicksField = last?.CapturedAtTicks ?? 0,
-                SizeBytesField = last?.SizeBytes ?? 0,
-                HealthField = FileHealth.Watching,
-            });
+            _rows.Add(
+                new WatchedRow
+                {
+                    Guid = wf.Guid,
+                    DisplayName = wf.DisplayName,
+                    Path = wf.CurrentPath,
+                    IsActiveField = wf.IsActive,
+                    VersionCountField = count,
+                    LastCapturedTicksField = last?.CapturedAtTicks ?? 0,
+                    SizeBytesField = last?.SizeBytes ?? 0,
+                    HealthField = FileHealth.Watching,
+                }
+            );
         }
         RefreshRowStyles();
         UpdateButtonStates();
@@ -186,9 +209,11 @@ internal sealed class MainForm : Form
     private void OnVersionCaptured(VersionEntry e) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(e.WatchedGuid);
-            if (row is null) return;
+            if (row is null)
+                return;
             row.VersionCountField += 1;
             row.LastCapturedTicksField = e.CapturedAtTicks;
             row.SizeBytesField = e.SizeBytes;
@@ -198,33 +223,41 @@ internal sealed class MainForm : Form
     private void OnHealthChanged(Guid guid, FileHealth h, string? msg) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(guid);
-            if (row is not null) row.HealthField = h;
+            if (row is not null)
+                row.HealthField = h;
         });
 
     private void OnFileAdded(WatchedFile wf) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
-            if (FindRowByPath(wf.CurrentPath) is not null) return;
-            _rows.Add(new WatchedRow
-            {
-                Guid = wf.Guid,
-                DisplayName = wf.DisplayName,
-                Path = wf.CurrentPath,
-                IsActiveField = true,
-                HealthField = FileHealth.Watching,
-            });
+            if (IsDisposed)
+                return;
+            if (FindRowByPath(wf.CurrentPath) is not null)
+                return;
+            _rows.Add(
+                new WatchedRow
+                {
+                    Guid = wf.Guid,
+                    DisplayName = wf.DisplayName,
+                    Path = wf.CurrentPath,
+                    IsActiveField = true,
+                    HealthField = FileHealth.Watching,
+                }
+            );
             RefreshRowStyles();
         });
 
     private void OnFileReactivated(WatchedFile wf) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(wf.Guid) ?? FindRowByPath(wf.CurrentPath);
-            if (row is null) return;
+            if (row is null)
+                return;
             row.IsActiveField = true;
             row.HealthField = FileHealth.Watching;
             RefreshRowStyles();
@@ -234,9 +267,11 @@ internal sealed class MainForm : Form
     private void OnFileDeactivated(Guid guid) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(guid);
-            if (row is not null) row.IsActiveField = false;
+            if (row is not null)
+                row.IsActiveField = false;
             RefreshRowStyles();
             UpdateButtonStates();
         });
@@ -244,105 +279,176 @@ internal sealed class MainForm : Form
     private void OnFileRemoved(Guid guid) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(guid);
-            if (row is not null) _rows.Remove(row);
+            if (row is not null)
+                _rows.Remove(row);
         });
 
     // 被监控文件被同目录改名:更新行显示。
     private void OnFileMovedUi(Guid guid, string newPath, string name) =>
         BeginInvoke(() =>
         {
-            if (IsDisposed) return;
+            if (IsDisposed)
+                return;
             var row = FindRow(guid);
-            if (row is null) return;
+            if (row is null)
+                return;
             row.DisplayName = name;
             row.Path = newPath;
         });
 
     private WatchedRow? FindRow(Guid g) => _rows.FirstOrDefault(r => r.Guid == g);
+
     private WatchedRow? FindRowByPath(string p) =>
         _rows.FirstOrDefault(r => string.Equals(r.Path, p, StringComparison.OrdinalIgnoreCase));
 
     private async Task AddAsync()
     {
         using var ofd = new OpenFileDialog { Multiselect = true, Title = "选择要监控的文件" };
-        if (ofd.ShowDialog(this) != DialogResult.OK) return;
+        if (ofd.ShowDialog(this) != DialogResult.OK)
+            return;
         foreach (var path in ofd.FileNames)
         {
             var wf = await _watches.AddFileAsync(path);
             if (wf is null)
-                MessageBox.Show(this, $"未能添加(可能是不支持的路径、在保险库内部,或非法路径):\n{path}",
-                    "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    this,
+                    $"未能添加（可能是不支持的路径、在保险库内部，或非法路径）：\n{path}",
+                    "Keen",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
         }
     }
 
     private async Task RemoveAsync()
     {
-        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row) return;
-        var ok = MessageBox.Show(this,
-            $"移除对该文件的监控?\n历史版本会保留(主窗里灰显,「历史」仍可用)。\n{row.Path}", "Keen",
-            MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-        if (ok != DialogResult.OK) return;
-        try { await _watches.RemoveAsync(row.Guid); } // FileDeactivated 会把行置灰
+        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row)
+            return;
+        var ok = MessageBox.Show(
+            this,
+            $"移除对该文件的监控？\n历史版本会保留（主窗里灰显，「历史」仍可用）。\n{row.Path}",
+            "Keen",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Question
+        );
+        if (ok != DialogResult.OK)
+            return;
+        try
+        {
+            await _watches.RemoveAsync(row.Guid);
+        } // FileDeactivated 会把行置灰
         catch (Exception ex)
         {
-            MessageBox.Show(this, "停止监控失败:" + ex.Message, "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                this,
+                "停止监控失败：" + ex.Message,
+                "Keen",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
         }
     }
 
     private async Task ReactivateAsync()
     {
         var guid = SelectedGuid();
-        if (guid == Guid.Empty) return;
-        try { await _watches.ReactivateAsync(guid); } // FileReactivated 会恢复行
+        if (guid == Guid.Empty)
+            return;
+        try
+        {
+            await _watches.ReactivateAsync(guid);
+        } // FileReactivated 会恢复行
         catch (Exception ex)
         {
-            MessageBox.Show(this, "重新监控失败:" + ex.Message, "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                this,
+                "重新监控失败：" + ex.Message,
+                "Keen",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
         }
     }
 
     private async Task PurgeAsync()
     {
-        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row) return;
-        var ok = MessageBox.Show(this,
-            $"彻底删除该文件的全部历史版本?\n此操作不可撤销。\n{row.DisplayName}", "Keen",
-            MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
-        if (ok != DialogResult.OK) return;
-        try { await _watches.PurgeAsync(row.Guid); } // FileRemoved 会移除行
+        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row)
+            return;
+        var ok = MessageBox.Show(
+            this,
+            $"彻底删除该文件的全部历史版本？\n此操作不可撤销。\n{row.DisplayName}",
+            "Keen",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Warning
+        );
+        if (ok != DialogResult.OK)
+            return;
+        try
+        {
+            await _watches.PurgeAsync(row.Guid);
+        } // FileRemoved 会移除行
         catch (Exception ex)
         {
-            MessageBox.Show(this, "彻底删除失败:" + ex.Message, "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                this,
+                "彻底删除失败：" + ex.Message,
+                "Keen",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
         }
     }
 
     private void OpenSelected()
     {
-        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row) return;
-        try { Process.Start(new ProcessStartInfo(row.Path) { UseShellExecute = true }); }
-        catch (Exception ex) { MessageBox.Show(this, "打开失败:" + ex.Message, "Keen"); }
+        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row)
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(row.Path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "打开失败：" + ex.Message, "Keen");
+        }
     }
 
     private void HistorySelected()
     {
-        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row) return;
+        if (_grid.CurrentRow?.DataBoundItem is not WatchedRow row)
+            return;
         new HistoryForm(row.Guid, row.DisplayName, _sp).Show();
     }
 
     // #4 双击文件列→历史;双击路径列→打开所在文件夹。
     private void OnCellDoubleClicked(DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0) return;
+        if (e.RowIndex < 0)
+            return;
         var row = _grid.Rows[e.RowIndex].DataBoundItem as WatchedRow;
-        if (row is null) return;
+        if (row is null)
+            return;
         var col = _grid.Columns[e.ColumnIndex].Name;
-        if (col == nameof(WatchedRow.DisplayName)) HistorySelected();
-        else if (col == nameof(WatchedRow.Path)) OpenFolder(row.Path);
+        if (col == nameof(WatchedRow.DisplayName))
+            HistorySelected();
+        else if (col == nameof(WatchedRow.Path))
+            OpenFolder(row.Path);
     }
 
     private static void OpenFolder(string path)
     {
-        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }); }
+        try
+        {
+            Process.Start(
+                new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+                {
+                    UseShellExecute = true,
+                }
+            );
+        }
         catch { }
     }
 
@@ -351,9 +457,13 @@ internal sealed class MainForm : Form
     {
         var files = await _index.LoadAllWatchedFilesAsync();
         var (count, size) = await _index.GetTotalsAsync();
-        MessageBox.Show(this,
-            $"被监控文件(含已移除):{files.Count}\n版本总数:{count}\n版本合计大小:{VersionRow.FormatBytes(size)}",
-            "Keen · 统计", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show(
+            this,
+            $"被监控文件（含已移除）：{files.Count}\n版本总数：{count}\n版本合计大小：{VersionRow.FormatBytes(size)}",
+            "Keen · 统计",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        );
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -384,12 +494,26 @@ internal sealed class WatchedRow : INotifyPropertyChanged
     public string DisplayName
     {
         get => _displayName;
-        set { if (_displayName != value) { _displayName = value; On(); } }
+        set
+        {
+            if (_displayName != value)
+            {
+                _displayName = value;
+                On();
+            }
+        }
     }
     public string Path
     {
         get => _path;
-        set { if (_path != value) { _path = value; On(); } }
+        set
+        {
+            if (_path != value)
+            {
+                _path = value;
+                On();
+            }
+        }
     }
 
     private long _versionCount;
@@ -401,59 +525,145 @@ internal sealed class WatchedRow : INotifyPropertyChanged
     public long VersionCount
     {
         get => _versionCount;
-        set { if (_versionCount != value) { _versionCount = value; On(); } }
+        set
+        {
+            if (_versionCount != value)
+            {
+                _versionCount = value;
+                On();
+            }
+        }
     }
     public long LastCapturedTicks
     {
         get => _lastTicks;
-        set { if (_lastTicks != value) { _lastTicks = value; On(nameof(LastCapturedDisplay)); } }
+        set
+        {
+            if (_lastTicks != value)
+            {
+                _lastTicks = value;
+                On(nameof(LastCapturedDisplay));
+            }
+        }
     }
     public long SizeBytes
     {
         get => _size;
-        set { if (_size != value) { _size = value; On(nameof(SizeDisplay)); } }
+        set
+        {
+            if (_size != value)
+            {
+                _size = value;
+                On(nameof(SizeDisplay));
+            }
+        }
     }
     public FileHealth Health
     {
         get => _health;
-        set { if (_health != value) { _health = value; On(nameof(HealthDisplay)); } }
+        set
+        {
+            if (_health != value)
+            {
+                _health = value;
+                On(nameof(HealthDisplay));
+            }
+        }
     }
     public bool IsActive
     {
         get => _isActive;
-        set { if (_isActive != value) { _isActive = value; On(nameof(HealthDisplay)); } }
+        set
+        {
+            if (_isActive != value)
+            {
+                _isActive = value;
+                On(nameof(HealthDisplay));
+            }
+        }
     }
 
-    internal long VersionCountField { get => _versionCount; set { _versionCount = value; On(nameof(VersionCount)); } }
-    internal long LastCapturedTicksField { get => _lastTicks; set { _lastTicks = value; On(nameof(LastCapturedDisplay)); } }
-    internal long SizeBytesField { get => _size; set { _size = value; On(nameof(SizeDisplay)); } }
-    internal FileHealth HealthField { get => _health; set { _health = value; On(nameof(HealthDisplay)); } }
-    internal bool IsActiveField { get => _isActive; set { _isActive = value; On(nameof(HealthDisplay)); } }
-
-    public string HealthDisplay => !IsActive ? "已移除" : Health switch
+    internal long VersionCountField
     {
-        FileHealth.Watching => "监听中",
-        FileHealth.Syncing => "存版中",
-        FileHealth.Degraded => "降级",
-        FileHealth.Failing => "失败",
-        FileHealth.Missing => "缺失",
-        _ => Health.ToString(),
-    };
+        get => _versionCount;
+        set
+        {
+            _versionCount = value;
+            On(nameof(VersionCount));
+        }
+    }
+    internal long LastCapturedTicksField
+    {
+        get => _lastTicks;
+        set
+        {
+            _lastTicks = value;
+            On(nameof(LastCapturedDisplay));
+        }
+    }
+    internal long SizeBytesField
+    {
+        get => _size;
+        set
+        {
+            _size = value;
+            On(nameof(SizeDisplay));
+        }
+    }
+    internal FileHealth HealthField
+    {
+        get => _health;
+        set
+        {
+            _health = value;
+            On(nameof(HealthDisplay));
+        }
+    }
+    internal bool IsActiveField
+    {
+        get => _isActive;
+        set
+        {
+            _isActive = value;
+            On(nameof(HealthDisplay));
+        }
+    }
 
-    public string LastCapturedDisplay => LastCapturedTicks == 0 ? "—" :
-        new DateTime(LastCapturedTicks, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    public string HealthDisplay =>
+        !IsActive
+            ? "已移除"
+            : Health switch
+            {
+                FileHealth.Watching => "监听中",
+                FileHealth.Syncing => "存版中",
+                FileHealth.Degraded => "降级",
+                FileHealth.Failing => "失败",
+                FileHealth.Missing => "缺失",
+                _ => Health.ToString(),
+            };
+
+    public string LastCapturedDisplay =>
+        LastCapturedTicks == 0
+            ? "—"
+            : new DateTime(LastCapturedTicks, DateTimeKind.Utc)
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss");
 
     public string SizeDisplay => FormatBytes(SizeBytes);
 
     private static string FormatBytes(long n)
     {
-        if (n < 1024) return n + " B";
-        if (n < 1024L * 1024) return (n / 1024.0).ToString("F1") + " KB";
-        if (n < 1024L * 1024 * 1024) return (n / 1024.0 / 1024).ToString("F1") + " MB";
+        if (n < 1024)
+            return n + " B";
+        if (n < 1024L * 1024)
+            return (n / 1024.0).ToString("F1") + " KB";
+        if (n < 1024L * 1024 * 1024)
+            return (n / 1024.0 / 1024).ToString("F1") + " MB";
         return (n / 1024.0 / 1024 / 1024).ToString("F2") + " GB";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
     private void On([CallerMemberName] string? p = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 }

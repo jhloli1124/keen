@@ -16,7 +16,11 @@ internal static class Program
         AppPaths.Ensure();
         ApplicationConfiguration.Initialize();
         // 跟随系统深/浅色主题(.NET 9+ WinForms 暗色模式);失败不阻塞启动。
-        try { Application.SetColorMode(SystemColorMode.System); } catch { }
+        try
+        {
+            Application.SetColorMode(SystemColorMode.System);
+        }
+        catch { }
 
         using var single = new SingleInstance();
         if (!single.TryAcquire())
@@ -24,7 +28,11 @@ internal static class Program
             // 已有实例在跑:把 --add 的路径经命名管道转发给它,然后退出。
             if (addPath is not null)
             {
-                try { IpcService.SendPath(addPath); } catch { }
+                try
+                {
+                    IpcService.SendPath(addPath);
+                }
+                catch { }
             }
             return;
         }
@@ -35,7 +43,8 @@ internal static class Program
             .WriteTo.File(
                 path: Path.Combine(AppPaths.LogDir, "keen-.log"),
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14)
+                retainedFileCountLimit: 14
+            )
             .CreateLogger();
 
         try
@@ -78,7 +87,11 @@ internal static class Program
         return null;
     }
 
-    private static ServiceProvider BuildServices(ConfigService config, VaultStore store, VaultIndex index)
+    private static ServiceProvider BuildServices(
+        ConfigService config,
+        VaultStore store,
+        VaultIndex index
+    )
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddSerilog(dispose: false));
@@ -88,7 +101,8 @@ internal static class Program
         services.AddSingleton<BackupPipeline>(sp => new BackupPipeline(
             sp.GetRequiredService<VaultStore>(),
             sp.GetRequiredService<VaultIndex>(),
-            sp.GetRequiredService<ILogger<BackupPipeline>>()));
+            sp.GetRequiredService<ILogger<BackupPipeline>>()
+        ));
         services.AddSingleton<FileWatchService>();
         services.AddSingleton<WatchService>();
         services.AddSingleton<RestoreService>();

@@ -17,8 +17,14 @@ internal sealed class SingleInstance : IDisposable
 
     public void Dispose()
     {
-        if (_mutex is null) return;
-        try { if (_owned) _mutex.ReleaseMutex(); } catch { }
+        if (_mutex is null)
+            return;
+        try
+        {
+            if (_owned)
+                _mutex.ReleaseMutex();
+        }
+        catch { }
         _mutex.Dispose();
     }
 }

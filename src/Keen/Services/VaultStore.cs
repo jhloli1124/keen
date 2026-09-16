@@ -8,6 +8,7 @@ namespace Keen.Services;
 internal sealed class VaultStore
 {
     private readonly string _root;
+
     public VaultStore(string root)
     {
         _root = root;
@@ -17,7 +18,11 @@ internal sealed class VaultStore
     public string Root => _root;
 
     public async Task<(long size, string sha256)> WriteBlobAsync(
-        Stream source, string relPath, IProgress<long>? progress, CancellationToken ct)
+        Stream source,
+        string relPath,
+        IProgress<long>? progress,
+        CancellationToken ct
+    )
     {
         var full = Path.Combine(_root, relPath);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
@@ -25,8 +30,16 @@ internal sealed class VaultStore
 
         long total;
         byte[] hash;
-        await using (var dst = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20,
-                     FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.WriteThrough))
+        await using (
+            var dst = new FileStream(
+                tmp,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                1 << 20,
+                FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.WriteThrough
+            )
+        )
         using (var sha = SHA256.Create())
         {
             var buf = ArrayPool<byte>.Shared.Rent(1 << 20);
@@ -56,10 +69,13 @@ internal sealed class VaultStore
             await dst.FlushAsync(ct);
             dst.Flush(flushToDisk: true);
             if (dst.Length != total)
-                throw new IOException($"length mismatch writing {relPath}: {dst.Length} != {total}");
+                throw new IOException(
+                    $"length mismatch writing {relPath}: {dst.Length} != {total}"
+                );
         }
 
-        if (File.Exists(full)) File.Delete(full);
+        if (File.Exists(full))
+            File.Delete(full);
         File.Move(tmp, full);
         progress?.Report(total);
 
@@ -71,8 +87,15 @@ internal sealed class VaultStore
 
     public void DeleteBlob(string relPath)
     {
-        try { var full = Path.Combine(_root, relPath); if (File.Exists(full)) File.Delete(full); }
-        catch { /* 删除失败不影响主流程 */ }
+        try
+        {
+            var full = Path.Combine(_root, relPath);
+            if (File.Exists(full))
+                File.Delete(full);
+        }
+        catch
+        { /* 删除失败不影响主流程 */
+        }
     }
 
     // 启动清扫:保险库里残留的 *.keenpartial(上次崩溃在写入中途留下的)。
@@ -80,9 +103,19 @@ internal sealed class VaultStore
     {
         try
         {
-            foreach (var f in Directory.EnumerateFiles(_root, "*.keenpartial", SearchOption.AllDirectories))
+            foreach (
+                var f in Directory.EnumerateFiles(
+                    _root,
+                    "*.keenpartial",
+                    SearchOption.AllDirectories
+                )
+            )
             {
-                try { File.Delete(f); } catch { }
+                try
+                {
+                    File.Delete(f);
+                }
+                catch { }
             }
         }
         catch { }

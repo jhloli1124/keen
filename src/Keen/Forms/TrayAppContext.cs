@@ -23,47 +23,74 @@ internal sealed class TrayAppContext : ApplicationContext
     private readonly ToolStripMenuItem _shellItem;
     private readonly CancellationTokenSource _ipcCts = new();
     private Task? _ipcTask;
-    private MainForm? _main;        // 仅在 ShowMain 真正创建后赋值;退出时只动它
+    private MainForm? _main; // 仅在 ShowMain 真正创建后赋值;退出时只动它
     private bool _exiting;
     private bool _disposed;
 
     public TrayAppContext(ServiceProvider services)
     {
         _services = services;
-        _invoker = new Form { ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None, Size = new Size(0, 0) };
+        _invoker = new Form
+        {
+            ShowInTaskbar = false,
+            FormBorderStyle = FormBorderStyle.None,
+            Size = new Size(0, 0),
+        };
         _ui = SynchronizationContext.Current ?? new SynchronizationContext();
 
         _autoItem = new ToolStripMenuItem("开机自启") { Checked = IsAutostartOn() };
-        _shellItem = new ToolStripMenuItem("Explorer 右键:用 Keen 监控") { Checked = ShellIntegration.IsRegistered() };
+        _shellItem = new ToolStripMenuItem("Explorer 右键：用 Keen 监控")
+        {
+            Checked = ShellIntegration.IsRegistered(),
+        };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("显示主窗(&S)", image: null, (_, _) => ShowMain());
-        menu.Items.Add("设置(&E)…", image: null, (_, _) => { using var f = new SettingsForm(_services); f.ShowDialog(); });
+        menu.Items.Add(
+            "设置(&E)…",
+            image: null,
+            (_, _) =>
+            {
+                using var f = new SettingsForm(_services);
+                f.ShowDialog();
+            }
+        );
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoItem);
         menu.Items.Add(_shellItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出 Keen(&X)", image: null, (_, _) => ExitApp());
 
-        _autoItem.Click += (_, _) => { SetAutostart(!_autoItem.Checked); _autoItem.Checked = IsAutostartOn(); };
+        _autoItem.Click += (_, _) =>
+        {
+            SetAutostart(!_autoItem.Checked);
+            _autoItem.Checked = IsAutostartOn();
+        };
         _shellItem.Click += (_, _) =>
         {
             try
             {
-                if (_shellItem.Checked) ShellIntegration.Unregister();
-                else ShellIntegration.Register();
+                if (_shellItem.Checked)
+                    ShellIntegration.Unregister();
+                else
+                    ShellIntegration.Register();
                 _shellItem.Checked = ShellIntegration.IsRegistered();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("切换右键菜单失败:" + ex.Message, "Keen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    "切换右键菜单失败：" + ex.Message,
+                    "Keen",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
             }
         };
 
         _tray = new NotifyIcon
         {
             Icon = TrayIcon.Idle,
-            Text = "Keen (刻痕)",
+            Text = "Keen（刻痕）",
             Visible = true,
             ContextMenuStrip = menu,
         };
@@ -87,7 +114,11 @@ internal sealed class TrayAppContext : ApplicationContext
 
         if (addPath is not null)
         {
-            try { await watches.AddFileAsync(addPath); } catch { }
+            try
+            {
+                await watches.AddFileAsync(addPath);
+            }
+            catch { }
         }
     }
 
@@ -98,46 +129,74 @@ internal sealed class TrayAppContext : ApplicationContext
         try
         {
             var wf = await watches.AddFileAsync(path);
-            if (wf is null) err = "路径不支持、在保险库内或已存在";
+            if (wf is null)
+                err = "路径不支持、在保险库内或已存在";
         }
-        catch (Exception ex) { err = ex.Message; }
+        catch (Exception ex)
+        {
+            err = ex.Message;
+        }
         if (err is not null)
         {
-            _ui.Post(_ =>
-            {
-                try { _tray.ShowBalloonTip(5000, "Keen:添加监控失败", $"{path}\n{err}", ToolTipIcon.Warning); }
-                catch { }
-            }, null);
+            _ui.Post(
+                _ =>
+                {
+                    try
+                    {
+                        _tray.ShowBalloonTip(
+                            5000,
+                            "Keen：添加监控失败",
+                            $"{path}\n{err}",
+                            ToolTipIcon.Warning
+                        );
+                    }
+                    catch { }
+                },
+                null
+            );
         }
     }
 
     private void OnHealth(Guid guid, FileHealth h, string? msg) =>
-        _ui.Post(_ =>
-        {
-            _health[guid] = h;
-            var anyBad = _health.Values.Any(x =>
-                x == FileHealth.Failing || x == FileHealth.Degraded || x == FileHealth.Missing);
-            _tray.Icon = anyBad ? TrayIcon.Error : TrayIcon.Idle;
-        }, null);
+        _ui.Post(
+            _ =>
+            {
+                _health[guid] = h;
+                var anyBad = _health.Values.Any(x =>
+                    x == FileHealth.Failing || x == FileHealth.Degraded || x == FileHealth.Missing
+                );
+                _tray.Icon = anyBad ? TrayIcon.Error : TrayIcon.Idle;
+            },
+            null
+        );
 
     private void OnCaptureFailed(Guid guid, string name) =>
-        _ui.Post(_ =>
-        {
-            try
+        _ui.Post(
+            _ =>
             {
-                var cfg = _services.GetRequiredService<ConfigService>();
-                if (cfg.Current.NotifyOnFailure)
-                    _tray.ShowBalloonTip(5000, "Keen:存版失败",
-                        $"{name}\n捕获失败,将在稍后自动重试。", ToolTipIcon.Warning);
-            }
-            catch { }
-        }, null);
+                try
+                {
+                    var cfg = _services.GetRequiredService<ConfigService>();
+                    if (cfg.Current.NotifyOnFailure)
+                        _tray.ShowBalloonTip(
+                            5000,
+                            "Keen：存版失败",
+                            $"{name}\n捕获失败，将在稍后自动重试。",
+                            ToolTipIcon.Warning
+                        );
+                }
+                catch { }
+            },
+            null
+        );
 
     private void ShowMain()
     {
         _main = _services.GetRequiredService<MainForm>();
-        if (_main.WindowState == FormWindowState.Minimized) _main.WindowState = FormWindowState.Normal;
-        if (!_main.Visible) _main.Show();
+        if (_main.WindowState == FormWindowState.Minimized)
+            _main.WindowState = FormWindowState.Normal;
+        if (!_main.Visible)
+            _main.Show();
         _main.BringToFront();
         _main.Activate();
     }
@@ -145,27 +204,57 @@ internal sealed class TrayAppContext : ApplicationContext
     // async void:菜单 Click 回调,不阻塞 UI 线程。各步独立 try/catch,任何一处崩都不影响后续。
     private async void ExitApp()
     {
-        if (_exiting) return;
+        if (_exiting)
+            return;
         _exiting = true;
 
-        try { _tray.Visible = false; } catch { }
+        try
+        {
+            _tray.Visible = false;
+        }
+        catch { }
 
         // 只在主窗确实被打开过时才关它;避免在关停期凭空构造一个 Form。
-        try { if (_main is not null) { _main.AllowClose = true; _main.Close(); } } catch { }
+        try
+        {
+            if (_main is not null)
+            {
+                _main.AllowClose = true;
+                _main.Close();
+            }
+        }
+        catch { }
 
         // 关停后台件,带超时:卡住也最多等几秒就放行(进程反正要退)。
-        try { await ShutdownAsync(); } catch { }
+        try
+        {
+            await ShutdownAsync();
+        }
+        catch { }
 
-        try { ExitThread(); } catch { }
+        try
+        {
+            ExitThread();
+        }
+        catch { }
     }
 
     private async Task ShutdownAsync()
     {
         var pipeline = _services.GetRequiredService<BackupPipeline>();
-        try { pipeline.HealthChanged -= OnHealth; pipeline.CaptureFailed -= OnCaptureFailed; } catch { }
+        try
+        {
+            pipeline.HealthChanged -= OnHealth;
+            pipeline.CaptureFailed -= OnCaptureFailed;
+        }
+        catch { }
 
         _ipcCts.Cancel();
-        try { if (_ipcTask is not null) await Task.WhenAny(_ipcTask, Task.Delay(TimeSpan.FromSeconds(2))); }
+        try
+        {
+            if (_ipcTask is not null)
+                await Task.WhenAny(_ipcTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
         catch { }
 
         try
@@ -187,20 +276,39 @@ internal sealed class TrayAppContext : ApplicationContext
     private static void SetAutostart(bool on)
     {
         using var k = Registry.CurrentUser.CreateSubKey(RunKey);
-        if (on) k.SetValue(AppName, Application.ExecutablePath);
-        else k.DeleteValue(AppName, throwOnMissingValue: false);
+        if (on)
+            k.SetValue(AppName, Application.ExecutablePath);
+        else
+            k.DeleteValue(AppName, throwOnMissingValue: false);
     }
 
     protected override void Dispose(bool disposing)
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
         if (disposing)
         {
-            try { _ipcCts.Dispose(); } catch { }
-            try { _tray.Dispose(); } catch { }
-            try { _invoker.Dispose(); } catch { }
-            try { _services.Dispose(); } catch { }
+            try
+            {
+                _ipcCts.Dispose();
+            }
+            catch { }
+            try
+            {
+                _tray.Dispose();
+            }
+            catch { }
+            try
+            {
+                _invoker.Dispose();
+            }
+            catch { }
+            try
+            {
+                _services.Dispose();
+            }
+            catch { }
         }
         base.Dispose(disposing);
     }

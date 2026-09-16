@@ -27,6 +27,10 @@ internal static class ShellIntegration
 
     public static void Unregister()
     {
-        try { Registry.CurrentUser.DeleteSubKeyTree(VerbKey, throwOnMissingSubKey: false); } catch { }
+        try
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(VerbKey, throwOnMissingSubKey: false);
+        }
+        catch { }
     }
 }

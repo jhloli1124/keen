@@ -2,8 +2,10 @@ namespace Keen;
 
 internal static class AppPaths
 {
-    private static readonly string AppData =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Keen");
+    private static readonly string AppData = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Keen"
+    );
 
     public static string Vault => Path.Combine(AppData, "vault");
     public static string LogDir => Path.Combine(AppData, "logs");

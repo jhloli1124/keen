@@ -17,7 +17,9 @@ internal sealed class RestoreService
 
     public RestoreService(VaultStore store, VaultIndex index, BackupPipeline pipeline)
     {
-        _store = store; _index = index; _pipeline = pipeline;
+        _store = store;
+        _index = index;
+        _pipeline = pipeline;
     }
 
     public async Task RestoreAsync(VersionEntry target, CancellationToken ct = default)
@@ -25,20 +27,22 @@ internal sealed class RestoreService
         // 目标路径:优先取被监控文件的当前路径(改名跟随会更新它);
         // 版本行里的 OrigPathAtCapture 是捕获当时的路径,文件改名后指向旧位置,不能当恢复目标。
         var wf = await _index.GetWatchedFileAsync(target.WatchedGuid);
-        var origPath = wf is not null && !string.IsNullOrEmpty(wf.CurrentPath)
-            ? wf.CurrentPath
-            : target.OrigPathAtCapture;
+        var origPath =
+            wf is not null && !string.IsNullOrEmpty(wf.CurrentPath)
+                ? wf.CurrentPath
+                : target.OrigPathAtCapture;
 
         var verPath = _store.FullPath(target.StoredRelPath);
         if (!File.Exists(verPath))
-            throw new FileNotFoundException("历史版本文件缺失:", target.StoredRelPath);
+            throw new FileNotFoundException("历史版本文件缺失：", target.StoredRelPath);
 
         // 原文件不在(被删/被移):恢复 = 从历史重建——这正是恢复存在的意义,不是错误。
         // 没有可拍的当前状态 → 跳过前置快照;父目录缺失一并补建;File.Copy 直接落出文件。
         if (!File.Exists(origPath))
         {
             var dir = Path.GetDirectoryName(origPath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
             await CopyWithRetryAsync(verPath, origPath, ct);
             await _pipeline.ReSeedBaselineAsync(target.WatchedGuid);
             return;
@@ -51,10 +55,18 @@ internal sealed class RestoreService
         try
         {
             // ① 前置快照(bypass 去重,同步等待落地)
-            var snap = await _pipeline.CaptureDirectAsync(target.WatchedGuid, origPath, target.OrigFilename,
-                VersionKind.PreRestoreSnapshot, bypassDedupe: true, ct);
+            var snap = await _pipeline.CaptureDirectAsync(
+                target.WatchedGuid,
+                origPath,
+                target.OrigFilename,
+                VersionKind.PreRestoreSnapshot,
+                bypassDedupe: true,
+                ct
+            );
             if (snap is null)
-                throw new InvalidOperationException("无法为恢复创建前置快照(捕获失败,请查看日志)。");
+                throw new InvalidOperationException(
+                    "无法为恢复创建前置快照（捕获失败，请查看日志）。"
+                );
 
             // ② 直接覆盖原文件(不在用户目录留临时)。
             await CopyWithRetryAsync(verPath, origPath, ct);
@@ -77,11 +89,21 @@ internal sealed class RestoreService
         for (int i = 0; i < max; i++)
         {
             ct.ThrowIfCancellationRequested();
-            try { File.Copy(src, dest, overwrite: true); return; }
+            try
+            {
+                File.Copy(src, dest, overwrite: true);
+                return;
+            }
             // 不加 when(i<max-1):最后一次失败要落到循环外的友好错误,而不是裸异常漏给用户
-            catch (IOException) when (i < max - 1) { await Task.Delay(500 << i, ct); }
-            catch (UnauthorizedAccessException) when (i < max - 1) { await Task.Delay(500 << i, ct); }
+            catch (IOException) when (i < max - 1)
+            {
+                await Task.Delay(500 << i, ct);
+            }
+            catch (UnauthorizedAccessException) when (i < max - 1)
+            {
+                await Task.Delay(500 << i, ct);
+            }
         }
-        throw new IOException("覆盖原文件失败(可能被编辑器独占)。请关闭编辑器后重试。");
+        throw new IOException("覆盖原文件失败（可能被编辑器独占）。请关闭编辑器后重试。");
     }
 }

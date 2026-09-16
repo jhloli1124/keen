@@ -8,8 +8,8 @@ internal sealed class AppConfig
     public bool Autostart { get; set; } = false;
 
     // 保留策略:0 = 不限
-    public int RetainKeepLast { get; set; } = 0;     // 每文件最多留最近 N 版
-    public int RetainMaxAgeDays { get; set; } = 0;   // 超过 X 天的清掉
+    public int RetainKeepLast { get; set; } = 0; // 每文件最多留最近 N 版
+    public int RetainMaxAgeDays { get; set; } = 0; // 超过 X 天的清掉
 
     // 失败时弹 Windows 原生通知(toast)
     public bool NotifyOnFailure { get; set; } = true;

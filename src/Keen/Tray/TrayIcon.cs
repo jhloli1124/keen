@@ -11,8 +11,10 @@ internal static class TrayIcon
     private static Icon? _idle;
     private static Icon? _error;
 
-    public static Icon Idle => _idle ??= Make(Color.FromArgb(38, 39, 45), Color.FromArgb(232, 234, 240));
-    public static Icon Error => _error ??= Make(Color.FromArgb(150, 28, 28), Color.FromArgb(255, 232, 232));
+    public static Icon Idle =>
+        _idle ??= Make(Color.FromArgb(38, 39, 45), Color.FromArgb(232, 234, 240));
+    public static Icon Error =>
+        _error ??= Make(Color.FromArgb(150, 28, 28), Color.FromArgb(255, 232, 232));
 
     private static Icon Make(Color bg, Color fg)
     {
@@ -21,7 +23,8 @@ internal static class TrayIcon
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            using (var b = new SolidBrush(bg)) g.FillRectangle(b, 0, 0, 32, 32);
+            using (var b = new SolidBrush(bg))
+                g.FillRectangle(b, 0, 0, 32, 32);
             // 主刻痕:粗斜划
             using var pen = new Pen(fg, 3.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
             g.DrawLine(pen, 7, 25, 25, 7);

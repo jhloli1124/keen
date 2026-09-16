@@ -14,20 +14,33 @@ internal sealed class WatchService
     private readonly ConfigService _config;
     private readonly VaultStore _store;
     private readonly ILogger<WatchService> _log;
+
     // UI 线程(按钮/拖拽)与 IPC 线程(右键)可能并发添加同一文件;串行化查-插,防双记录(评审并发#4)
     private readonly SemaphoreSlim _addGate = new(1, 1);
 
-    public WatchService(VaultIndex index, BackupPipeline pipeline, FileWatchService watcher,
-        ConfigService config, VaultStore store, ILogger<WatchService> log)
+    public WatchService(
+        VaultIndex index,
+        BackupPipeline pipeline,
+        FileWatchService watcher,
+        ConfigService config,
+        VaultStore store,
+        ILogger<WatchService> log
+    )
     {
-        _index = index; _pipeline = pipeline; _watcher = watcher; _config = config; _store = store; _log = log;
+        _index = index;
+        _pipeline = pipeline;
+        _watcher = watcher;
+        _config = config;
+        _store = store;
+        _log = log;
         _watcher.FileMoved += OnFileMoved;
     }
 
     public event Action<WatchedFile>? FileAdded;
     public event Action<WatchedFile>? FileReactivated;
     public event Action<Guid>? FileDeactivated; // 软删除(留历史)
-    public event Action<Guid>? FileRemoved;     // 彻底删除(清历史)
+    public event Action<Guid>? FileRemoved; // 彻底删除(清历史)
+
     // 被监控文件被同目录改名:(guid, 新路径, 新显示名)。UI 更新行用。
     public event Action<Guid, string, string>? FileMovedUi;
 
@@ -38,8 +51,14 @@ internal sealed class WatchService
         {
             await _pipeline.RegisterAsync(wf.Guid, wf.CurrentPath, wf.DisplayName);
             // 单个坏路径(如盘不在)不能让整个启动崩掉
-            try { _watcher.Add(wf); }
-            catch (Exception ex) { _log.LogWarning(ex, "启动时无法武装监听:{Path}", wf.CurrentPath); }
+            try
+            {
+                _watcher.Add(wf);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "启动时无法武装监听:{Path}", wf.CurrentPath);
+            }
         }
     }
 
@@ -50,21 +69,36 @@ internal sealed class WatchService
         try
         {
             string full;
-            try { full = Path.GetFullPath(path); }
-            catch { return null; }
+            try
+            {
+                full = Path.GetFullPath(path);
+            }
+            catch
+            {
+                return null;
+            }
 
-            if (full.StartsWith(@"\\", StringComparison.Ordinal)) return null;
+            if (full.StartsWith(@"\\", StringComparison.Ordinal))
+                return null;
             // 用「当前生效的保险库根」(而非 config 里的新根)做排除,防止改库位置后重启前把库内文件存进库(评审不变量⑥)
             foreach (var root in VaultRoots())
             {
-                if (full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return null;
+                if (
+                    full.StartsWith(
+                        root + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase
+                    ) || string.Equals(full, root, StringComparison.OrdinalIgnoreCase)
+                )
+                    return null;
             }
-            if (Directory.Exists(full)) return null;
+            if (Directory.Exists(full))
+                return null;
 
             // 已存在(含已软删除的):直接重新激活,复用原历史
             var existing = await _index.LoadAllWatchedFilesAsync();
-            var hit = existing.FirstOrDefault(w => string.Equals(w.CurrentPath, full, StringComparison.OrdinalIgnoreCase));
+            var hit = existing.FirstOrDefault(w =>
+                string.Equals(w.CurrentPath, full, StringComparison.OrdinalIgnoreCase)
+            );
             if (hit is not null)
             {
                 if (!hit.IsActive)
@@ -74,7 +108,14 @@ internal sealed class WatchService
                     await _pipeline.RegisterAsync(hit.Guid, hit.CurrentPath, hit.DisplayName);
                     _watcher.Add(hit);
                     // 重新激活也补一版基线(停监控期间的改动不该留空档)
-                    _pipeline.Enqueue(new BackupJob { WatchedGuid = hit.Guid, SourcePath = hit.CurrentPath, DisplayName = hit.DisplayName });
+                    _pipeline.Enqueue(
+                        new BackupJob
+                        {
+                            WatchedGuid = hit.Guid,
+                            SourcePath = hit.CurrentPath,
+                            DisplayName = hit.DisplayName,
+                        }
+                    );
                     hit.IsActive = true;
                     FileReactivated?.Invoke(hit);
                 }
@@ -93,7 +134,14 @@ internal sealed class WatchService
             await _pipeline.RegisterAsync(wf.Guid, wf.CurrentPath, wf.DisplayName);
             _watcher.Add(wf);
             // 添加即存第一版(当前状态作为基线),否则要等下次保存才有版本。
-            _pipeline.Enqueue(new BackupJob { WatchedGuid = wf.Guid, SourcePath = wf.CurrentPath, DisplayName = wf.DisplayName });
+            _pipeline.Enqueue(
+                new BackupJob
+                {
+                    WatchedGuid = wf.Guid,
+                    SourcePath = wf.CurrentPath,
+                    DisplayName = wf.DisplayName,
+                }
+            );
             FileAdded?.Invoke(wf);
             _log.LogInformation("已添加监控:{Path}", full);
             return wf;
@@ -110,7 +158,8 @@ internal sealed class WatchService
         try
         {
             var cfgRoot = Path.GetFullPath(_config.Current.VaultRoot);
-            if (!roots.Contains(cfgRoot, StringComparer.OrdinalIgnoreCase)) roots.Add(cfgRoot);
+            if (!roots.Contains(cfgRoot, StringComparer.OrdinalIgnoreCase))
+                roots.Add(cfgRoot);
         }
         catch { }
         return roots;
@@ -129,13 +178,21 @@ internal sealed class WatchService
     public async Task<bool> ReactivateAsync(Guid guid)
     {
         var wf = await _index.GetWatchedFileAsync(guid);
-        if (wf is null) return false;
+        if (wf is null)
+            return false;
         await _index.ReactivateWatchedFileAsync(guid);
         await _pipeline.StopFileAsync(guid, TimeSpan.FromSeconds(2)); // 清可能的死状态
         await _pipeline.RegisterAsync(guid, wf.CurrentPath, wf.DisplayName);
         _watcher.Add(wf);
         wf.IsActive = true;
-        _pipeline.Enqueue(new BackupJob { WatchedGuid = guid, SourcePath = wf.CurrentPath, DisplayName = wf.DisplayName });
+        _pipeline.Enqueue(
+            new BackupJob
+            {
+                WatchedGuid = guid,
+                SourcePath = wf.CurrentPath,
+                DisplayName = wf.DisplayName,
+            }
+        );
         FileReactivated?.Invoke(wf);
         return true;
     }
@@ -147,13 +204,18 @@ internal sealed class WatchService
         await _pipeline.StopFileAsync(guid, TimeSpan.FromSeconds(3));
         _watcher.Remove(guid);
         var rels = await _index.PurgeWatchedFileAsync(guid);
-        foreach (var rel in rels) _store.DeleteBlob(rel);
+        foreach (var rel in rels)
+            _store.DeleteBlob(rel);
         try
         {
             var guidDir = Path.Combine(_store.Root, guid.ToString());
-            if (Directory.Exists(guidDir)) Directory.Delete(guidDir, recursive: true);
+            if (Directory.Exists(guidDir))
+                Directory.Delete(guidDir, recursive: true);
         }
-        catch (Exception ex) { _log.LogWarning(ex, "清理 {Guid} 的版本目录失败", guid); }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "清理 {Guid} 的版本目录失败", guid);
+        }
         _ = wf; // 保留查询以防未来需要;当前未用路径信息
         FileRemoved?.Invoke(guid);
     }
@@ -164,19 +226,30 @@ internal sealed class WatchService
         try
         {
             var wf = await _index.GetWatchedFileAsync(guid);
-            if (wf is null) return;
+            if (wf is null)
+                return;
             var name = Path.GetFileName(newPath);
             var oldPath = wf.CurrentPath;
             await _index.UpdateWatchedFilePathAsync(guid, newPath, name);
             _pipeline.UpdatePath(guid, newPath, name);
-            _watcher.Remove(guid);      // 用旧路径定位旧目录,重建其过滤器
+            _watcher.Remove(guid); // 用旧路径定位旧目录,重建其过滤器
             wf.CurrentPath = newPath;
             wf.DisplayName = name;
-            _watcher.Add(wf);           // 按新路径武装(可能换了目录)
-            _pipeline.Enqueue(new BackupJob { WatchedGuid = guid, SourcePath = newPath, DisplayName = name }); // 改名即存一版新名基线
+            _watcher.Add(wf); // 按新路径武装(可能换了目录)
+            _pipeline.Enqueue(
+                new BackupJob
+                {
+                    WatchedGuid = guid,
+                    SourcePath = newPath,
+                    DisplayName = name,
+                }
+            ); // 改名即存一版新名基线
             FileMovedUi?.Invoke(guid, newPath, name);
             _log.LogInformation("被监控文件改名:{Old} -> {New}", oldPath, newPath);
         }
-        catch (Exception ex) { _log.LogWarning(ex, "跟随重命名失败 {Guid}", guid); }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "跟随重命名失败 {Guid}", guid);
+        }
     }
 }
