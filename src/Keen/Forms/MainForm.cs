@@ -34,8 +34,8 @@ internal sealed class MainForm : Form
         _watches = sp.GetRequiredService<WatchService>();
 
         Text = "Keen · 被监控文件";
-        Width = 980;
-        Height = 580;
+        Width = 1200;
+        Height = 675;
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = true;
 
